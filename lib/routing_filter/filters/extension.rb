@@ -15,16 +15,18 @@
 
 module RoutingFilter
   class Extension < Filter
-    attr_reader :extension, :exclude
+    attr_reader :extension, :exclude, :exclude_host
 
     def initialize(*args)
       super
-      @exclude   = options[:exclude]
-      @extension = options[:extension] || 'html'
+      @exclude      = options[:exclude]
+      @exclude_host = options[:exclude_host]
+      @extension    = options[:extension] || 'html'
     end
 
     def around_recognize(path, env, &block)
-      extract_extension!(path) unless excluded?(path)
+      host = env['HTTP_HOST'].present? ? env['HTTP_HOST'] : 'www.example.com'
+      extract_extension!(path) unless excluded?(path, host)
       yield
     end
 
@@ -54,12 +56,19 @@ module RoutingFilter
         url.blank? || !!url.match(%r(^/(\?|$)))
       end
       
-      def excluded?(url)
-        case exclude
+      def excluded?(path, host = 'www.example.com')
+        return true if case exclude
         when Regexp
-          url =~ exclude
+          path =~ exclude
         when Proc
-          exclude.call(url)
+          exclude.call(path)
+        end
+
+        case exclude_host
+        when Regexp
+          host =~ exclude_host
+        when Proc
+          exclude_host.call(host)
         end
       end
       
